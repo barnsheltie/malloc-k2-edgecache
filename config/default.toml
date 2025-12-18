@@ -1,0 +1,69 @@
+# malloc-k2-edgecache Configuration
+# High-performance S3 caching proxy built on Cloudflare Pingora
+
+[server]
+# HTTP proxy port for S3 requests
+http_port = 9000
+
+# HTTPS proxy port for S3 requests (requires TLS cert/key)
+https_port = 9001
+
+# REST API port for management
+api_port = 14000
+
+# Number of worker threads (0 = auto-detect CPU cores)
+workers = 4
+
+# TLS certificate and key paths (optional, for HTTPS support)
+# tls_cert = "/etc/edgecache/ssl/cert.pem"
+# tls_key = "/etc/edgecache/ssl/key.pem"
+
+[cache]
+# Enable caching
+enabled = true
+
+# Disk cache path
+disk_path = "/var/cache/malloc-k2-edgecache"
+
+# Maximum disk cache size in GB
+disk_max_size_gb = 100
+
+# Maximum memory cache size in MB
+memory_max_size_mb = 1024
+
+# Default TTL for cached objects in seconds (1 hour)
+default_ttl_seconds = 3600
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Log format: json or text
+format = "json"
+
+# Enable syslog output
+syslog = false
+
+[s3]
+# Default S3 endpoint
+endpoint = "https://s3.amazonaws.com"
+
+# Default AWS region
+region = "us-east-1"
+
+# Default credentials (optional, can also use AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env vars)
+# access_key = "your-access-key"
+# secret_key = "your-secret-key"
+
+# Per-bucket configuration examples
+# [[buckets]]
+# name = "my-bucket"
+# endpoint = "https://s3.us-west-2.amazonaws.com"
+# region = "us-west-2"
+# cache_ttl = 7200  # 2 hours
+# access_key = "bucket-specific-key"
+# secret_key = "bucket-specific-secret"
+
+# [[buckets]]
+# name = "another-bucket"
+# cache_ttl = 86400  # 24 hours

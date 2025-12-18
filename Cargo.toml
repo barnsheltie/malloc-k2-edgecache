@@ -1,0 +1,94 @@
+[package]
+name = "malloc-k2-edgecache"
+version = "0.1.0"
+edition = "2021"
+authors = ["Malloc K2 Team"]
+description = "High-performance S3 caching proxy built on Cloudflare Pingora"
+license = "Apache-2.0"
+repository = "https://github.com/your-org/malloc-k2-edgecache"
+readme = "README.md"
+keywords = ["s3", "cache", "proxy", "cdn", "pingora"]
+categories = ["network-programming", "caching", "web-programming"]
+
+[dependencies]
+# Cloudflare Pingora framework
+pingora = "0.4"
+pingora-core = "0.4"
+pingora-proxy = "0.4"
+pingora-cache = "0.4"
+pingora-timeout = "0.4"
+pingora-http = "0.4"
+pingora-load-balancing = "0.4"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework for REST API
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# AWS SDK
+aws-sdk-s3 = "1.65"
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+aws-credential-types = "1.2"
+aws-sigv4 = "1.2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Configuration
+config = "0.14"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# API documentation
+utoipa = { version = "4", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "7", features = ["axum"] }
+
+# Metrics
+prometheus = "0.13"
+
+# Utilities
+bytes = "1"
+http = "1"
+url = "2"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dashmap = "6"
+parking_lot = "0.12"
+async-trait = "0.1"
+futures = "0.3"
+
+# Hashing for cache keys
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
+tempfile = "3"
+criterion = "0.5"
+mockall = "0.13"
+
+[[bench]]
+name = "cache_benchmark"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true

@@ -1,0 +1,42 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Cache directories (runtime cache, not source code)
+/cache/
+/var/cache/malloc-k2-edgecache/
+
+# Test artifacts
+*.profraw
+coverage/
+
+# Package build artifacts
+packages/debian/*.deb
+packages/docker/*.tar
+
+# Certificates (generated)
+*.pem
+*.key
+*.crt
+!config/certs/.gitkeep
