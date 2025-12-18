@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-malloc-k2-edgecache is a high-performance S3 caching proxy built on Cloudflare's Pingora framework. It sits between clients and AWS S3 (or S3-compatible storage), caching objects locally to reduce latency, bandwidth costs, and load on origin storage.
+malloc-k2-edgecache is a high-performance S3 caching proxy built on Cloudflare's Pingora framework. It replicates the functionality of KodiakEdgeCache (located at `~/k2/KodiakEdgeCache`) but rewritten in Rust for improved performance and memory safety.
+
+**Reference Implementation:** `~/k2/KodiakEdgeCache` (Node.js)
 
 ## Build Commands
 
@@ -45,7 +47,7 @@ RUST_LOG=debug cargo run -- --config config/default.toml
 src/
 ├── main.rs          # Application entry point
 ├── lib.rs           # Library exports
-├── config.rs        # Configuration structures and loading
+├── config.rs        # Configuration structures and loading (TOML-based)
 ├── api/             # REST API (axum-based)
 │   ├── mod.rs       # API server setup
 │   ├── routes.rs    # Route definitions
@@ -80,6 +82,32 @@ src/
 | 9001  | HTTPS S3 proxy |
 | 14000 | REST API       |
 
+## Current Status
+
+**Build:** ✅ Compiles successfully with Pingora 0.6
+**Tests:** Run `cargo test` to verify
+
+### Implemented
+- [x] Project structure with all modules
+- [x] Configuration (TOML-based)
+- [x] Memory cache with LRU eviction
+- [x] Disk cache with persistent storage
+- [x] AWS SigV4 authentication (signing + verification)
+- [x] REST API with health, config, cache, and bucket endpoints
+- [x] Prometheus metrics definitions
+- [x] Pingora proxy with S3 request parsing
+- [x] GitHub repo: https://github.com/barnsheltie/malloc-k2-edgecache
+
+### TODO (Next Steps)
+- [ ] Wire up cache to actually serve cached responses
+- [ ] Implement response body caching in proxy
+- [ ] Add write-back queue for deferred uploads
+- [ ] Add cache expiration background task
+- [ ] Implement multipart upload handling
+- [ ] Add Azure Blob Storage support
+- [ ] Add inter-node communication (port 14003)
+- [ ] Add HTTPS support with TLS certificates
+
 ## Configuration
 
 Configuration is TOML-based. See `config/default.toml` for all options.
@@ -91,45 +119,25 @@ Environment variables:
 - `RUST_LOG` - Log level (trace, debug, info, warn, error)
 - `CONFIG_PATH` - Config file path (default: config/default.toml)
 
-## Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Run cache tests
-cargo test cache::
-
-# Run auth tests
-cargo test auth::
-
-# Run with coverage (requires cargo-tarpaulin)
-cargo tarpaulin
-```
-
 ## Dependencies
 
 Key dependencies:
-- **pingora** (0.4) - Cloudflare's proxy framework
+- **pingora** (0.6) - Cloudflare's proxy framework
 - **tokio** - Async runtime
-- **axum** - REST API framework
-- **aws-sigv4** - AWS authentication
+- **axum** (0.7) - REST API framework
+- **hmac/sha2** - AWS authentication
 - **dashmap** - Concurrent hash maps
 - **prometheus** - Metrics
 
-## Adding New Features
+## Reference: KodiakEdgeCache
 
-1. **New cache backend**: Implement the cache trait pattern in `src/cache/`
-2. **New auth method**: Add module under `src/auth/` and register in `AuthManager`
-3. **New API endpoint**: Add route in `api/routes.rs` and handler in `api/handlers.rs`
-4. **New metrics**: Add to `metrics/mod.rs` and call recording functions
+The original Node.js implementation is at `~/k2/KodiakEdgeCache`. Key reference files:
+- `usr/src/EdgeCache/EdgeCache_core.js` - Core architecture
+- `usr/src/EdgeCache/aws/s3proxy.js` - S3 caching logic (406KB)
+- `usr/src/EdgeCache/aws/s3auth.js` - AWS authentication
+- `usr/src/EdgeCache/routes/EdgeCache_api.js` - REST API definitions
 
-## Reference
+## Git Info
 
-This project is inspired by KodiakEdgeCache and aims for feature parity:
-- Full S3 API proxy support
-- Memory + disk caching with TTL
-- Write-back cache mode (planned)
-- AWS SigV4 authentication
-- REST API for management
-- Prometheus metrics
+- **Remote:** https://github.com/barnsheltie/malloc-k2-edgecache
+- **Branch:** master

@@ -12,13 +12,13 @@ categories = ["network-programming", "caching", "web-programming"]
 
 [dependencies]
 # Cloudflare Pingora framework
-pingora = "0.4"
-pingora-core = "0.4"
-pingora-proxy = "0.4"
-pingora-cache = "0.4"
-pingora-timeout = "0.4"
-pingora-http = "0.4"
-pingora-load-balancing = "0.4"
+pingora = "0.6"
+pingora-core = "0.6"
+pingora-proxy = "0.6"
+pingora-cache = "0.6"
+pingora-timeout = "0.6"
+pingora-http = "0.6"
+pingora-load-balancing = "0.6"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -68,9 +68,10 @@ parking_lot = "0.12"
 async-trait = "0.1"
 futures = "0.3"
 
-# Hashing for cache keys
+# Hashing for cache keys and auth
 sha2 = "0.10"
 hex = "0.4"
+hmac = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -79,9 +80,10 @@ tempfile = "3"
 criterion = "0.5"
 mockall = "0.13"
 
-[[bench]]
-name = "cache_benchmark"
-harness = false
+# Benchmarks disabled until benchmark files are created
+# [[bench]]
+# name = "cache_benchmark"
+# harness = false
 
 [profile.release]
 opt-level = 3

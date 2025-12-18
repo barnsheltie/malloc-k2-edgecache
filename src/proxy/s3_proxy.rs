@@ -1,12 +1,12 @@
 //! S3 Proxy implementation using Pingora
 
-use anyhow::Result;
 use async_trait::async_trait;
 use pingora_core::prelude::*;
+use pingora_core::services::background::background_service;
 use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::cache::{CacheKey, CacheManager};
 use crate::config::Config;
@@ -24,7 +24,7 @@ impl S3Proxy {
     }
 
     /// Run the proxy server
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         info!("Starting S3 proxy server...");
 
         // Create Pingora server
@@ -32,25 +32,26 @@ impl S3Proxy {
         server.bootstrap();
 
         // Create proxy service
-        let proxy_service = self.create_proxy_service();
+        let handler = S3ProxyHandler {
+            config: self.config.clone(),
+            cache: self.cache.clone(),
+        };
 
-        // Add HTTP listener
         let http_addr = format!("0.0.0.0:{}", self.config.server.http_port);
+
+        // Use http_proxy_service helper
+        let mut proxy_service = pingora_proxy::http_proxy_service(
+            &server.configuration,
+            handler,
+        );
+        proxy_service.add_tcp(&http_addr);
+
         server.add_service(proxy_service);
 
         info!("S3 proxy listening on {}", http_addr);
 
         // Run the server
         server.run_forever();
-    }
-
-    fn create_proxy_service(&self) -> pingora_proxy::HttpProxy<S3ProxyHandler> {
-        let handler = S3ProxyHandler {
-            config: self.config.clone(),
-            cache: self.cache.clone(),
-        };
-
-        pingora_proxy::HttpProxy::new(handler, "s3-proxy")
     }
 }
 
@@ -124,7 +125,8 @@ impl ProxyHttp for S3ProxyHandler {
         ctx.upstream_addr = upstream.clone();
 
         // Parse upstream URL
-        let upstream_url = url::Url::parse(&upstream)?;
+        let upstream_url = url::Url::parse(&upstream)
+            .map_err(|e| Error::because(ErrorType::InternalError, "Invalid upstream URL", e))?;
         let host = upstream_url.host_str().unwrap_or("s3.amazonaws.com");
         let port = upstream_url.port().unwrap_or(443);
         let tls = upstream_url.scheme() == "https";
@@ -146,7 +148,7 @@ impl ProxyHttp for S3ProxyHandler {
         if method == "GET" {
             if let Some(ref cache_key) = ctx.cache_key {
                 // Try to serve from cache
-                if let Some(cached) = self.cache.get(cache_key).await {
+                if let Some(_cached) = self.cache.get(cache_key).await {
                     debug!("Cache hit for {:?}", cache_key);
 
                     // TODO: Send cached response
