@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EdgeCache - High-Performance S3 Caching Proxy</title>
+  <meta name="description" content="A distributed S3 caching proxy built on Cloudflare Pingora for maximum performance and reliability.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-terminal: #1d1f21;
+      --bg-card: #16161e;
+      --text-primary: #e4e4e7;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent-cyan: #22d3ee;
+      --accent-green: #4ade80;
+      --accent-purple: #a78bfa;
+      --accent-yellow: #fbbf24;
+      --accent-red: #f87171;
+      --border: #27272a;
+      --glow-cyan: rgba(34, 211, 238, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(10, 10, 15, 0.8);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-cta {
+      background: var(--accent-cyan);
+      color: var(--bg-primary);
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+
+    .nav-cta:hover {
+      opacity: 0.9;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 600px;
+      background: radial-gradient(ellipse, var(--glow-cyan) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    h1 {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 20px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: var(--bg-primary);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--glow-cyan);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      border-color: var(--text-muted);
+    }
+
+    /* Terminal Demo */
+    .terminal-demo {
+      margin-top: 60px;
+      position: relative;
+    }
+
+    .terminal {
+      background: var(--bg-terminal);
+      border-radius: 12px;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    .terminal-header {
+      background: #3c3c3c;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .terminal-body {
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .terminal-line {
+      margin-bottom: 4px;
+    }
+
+    .terminal-prompt {
+      color: var(--accent-green);
+    }
+
+    .terminal-command {
+      color: var(--accent-cyan);
+    }
+
+    .terminal-output {
+      color: var(--text-secondary);
+    }
+
+    .terminal-highlight {
+      color: var(--accent-yellow);
+    }
+
+    .terminal-success {
+      color: var(--accent-green);
+    }
+
+    /* Features */
+    .features {
+      padding: 120px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-label {
+      color: var(--accent-cyan);
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 18px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-4px);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* Architecture */
+    .architecture {
+      padding: 120px 0;
+      background: var(--bg-secondary);
+    }
+
+    .arch-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      margin-top: 60px;
+      flex-wrap: wrap;
+    }
+
+    .arch-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      min-width: 200px;
+    }
+
+    .arch-node.primary {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 40px var(--glow-cyan);
+    }
+
+    .arch-node-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+
+    .arch-node h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .arch-node p {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .arch-arrow {
+      color: var(--text-muted);
+      font-size: 24px;
+    }
+
+    /* Stats */
+    .stats {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 40px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* CTA */
+    .cta {
+      padding: 120px 0;
+      text-align: center;
+    }
+
+    .cta h2 {
+      margin-bottom: 24px;
+    }
+
+    .cta p {
+      color: var(--text-secondary);
+      font-size: 18px;
+      margin-bottom: 40px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--accent-cyan);
+    }
+
+    /* Responsive */
+    @media (max-width: 968px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      h1 {
+        font-size: 44px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-links {
+        display: none;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 36px;
+      }
+
+      .arch-diagram {
+        flex-direction: column;
+      }
+
+      .arch-arrow {
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="container">
+      <a href="#" class="logo">
+        <div class="logo-icon">&gt;_</div>
+        EdgeCache
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="https://github.com/barnsheltie/malloc-k2-edgecache">Documentation</a></li>
+      </ul>
+      <a href="https://github.com/barnsheltie/malloc-k2-edgecache" class="nav-cta">View on GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="badge">
+          <span class="badge-dot"></span>
+          Built on Cloudflare Pingora
+        </div>
+        <h1>High-Performance<br><span>S3 Caching Proxy</span></h1>
+        <p class="hero-subtitle">
+          Distributed edge caching for S3-compatible storage with sub-millisecond response times,
+          write-back queues, and real-time cluster coordination.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/barnsheltie/malloc-k2-edgecache" class="btn btn-primary">
+            Get Started
+          </a>
+          <a href="#features" class="btn btn-secondary">
+            Learn More
+          </a>
+        </div>
+
+        <div class="terminal-demo">
+          <div class="terminal">
+            <div class="terminal-header">
+              <span class="terminal-dot red"></span>
+              <span class="terminal-dot yellow"></span>
+              <span class="terminal-dot green"></span>
+              <span class="terminal-title">edgecache - bash</span>
+            </div>
+            <div class="terminal-body">
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-command"> curl -I http://cache.example.com/my-bucket/assets/logo.png</span>
+              </div>
+              <div class="terminal-line terminal-output">HTTP/1.1 200 OK</div>
+              <div class="terminal-line terminal-output">Content-Type: image/png</div>
+              <div class="terminal-line terminal-output">Content-Length: 24576</div>
+              <div class="terminal-line terminal-output">X-Cache: <span class="terminal-success">HIT</span></div>
+              <div class="terminal-line terminal-output">X-Cache-Lookup: <span class="terminal-highlight">memory</span></div>
+              <div class="terminal-line terminal-output">X-Response-Time: <span class="terminal-success">0.3ms</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-label">Features</div>
+          <h2>Everything you need for edge caching</h2>
+          <p class="section-desc">
+            Production-ready caching infrastructure with enterprise features built-in.
+          </p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">&#x26a1;</div>
+            <h3>Two-Tier Caching</h3>
+            <p>Memory-first LRU cache with disk spillover. Hot objects served from RAM, warm objects from SSD.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">&#x1f4dd;</div>
+            <h3>Write-Back Queue</h3>
+            <p>Async uploads to S3 with automatic retries. Writes return immediately, synced in background.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">&#x1f517;</div>
+            <h3>Multipart Uploads</h3>
+            <p>Full support for large file uploads with part tracking, assembly, and resume capabilities.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">&#x1f310;</div>
+            <h3>Distributed Coordination</h3>
+            <p>Federator service coordinates cache nodes with real-time invalidation and object routing.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">&#x1f512;</div>
+            <h3>AWS SigV4 Auth</h3>
+            <p>Native AWS Signature V4 authentication. Works seamlessly with existing S3 clients and SDKs.</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">&#x1f4ca;</div>
+            <h3>Prometheus Metrics</h3>
+            <p>Built-in observability with cache hit rates, latency histograms, and connection metrics.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="architecture" id="architecture">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-label">Architecture</div>
+          <h2>Hub-Spoke Distribution</h2>
+          <p class="section-desc">
+            Central federator coordinates cache and storage nodes for consistent, low-latency access.
+          </p>
+        </div>
+
+        <div class="arch-diagram">
+          <div class="arch-node">
+            <div class="arch-node-icon">&#x1f4e6;</div>
+            <h4>S3 Origin</h4>
+            <p>AWS S3 or compatible</p>
+          </div>
+
+          <span class="arch-arrow">&#x2192;</span>
+
+          <div class="arch-node">
+            <div class="arch-node-icon">&#x1f4be;</div>
+            <h4>Storage Node</h4>
+            <p>Authoritative cache</p>
+          </div>
+
+          <span class="arch-arrow">&#x2194;</span>
+
+          <div class="arch-node primary">
+            <div class="arch-node-icon">&#x1f310;</div>
+            <h4>Federator</h4>
+            <p>Coordination hub</p>
+          </div>
+
+          <span class="arch-arrow">&#x2194;</span>
+
+          <div class="arch-node">
+            <div class="arch-node-icon">&#x26a1;</div>
+            <h4>Cache Nodes</h4>
+            <p>Edge locations</p>
+          </div>
+
+          <span class="arch-arrow">&#x2192;</span>
+
+          <div class="arch-node">
+            <div class="arch-node-icon">&#x1f464;</div>
+            <h4>Clients</h4>
+            <p>Your applications</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="container">
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-value">&lt;1ms</div>
+            <div class="stat-label">Cache Hit Latency</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">95%+</div>
+            <div class="stat-label">Typical Hit Rate</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">100K+</div>
+            <div class="stat-label">Requests/Second</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">0</div>
+            <div class="stat-label">Data Loss Events</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="container">
+        <h2>Ready to accelerate your storage?</h2>
+        <p>Deploy EdgeCache in minutes with our getting started guide.</p>
+        <div class="hero-actions">
+          <a href="https://github.com/barnsheltie/malloc-k2-edgecache" class="btn btn-primary">
+            View on GitHub
+          </a>
+          <a href="https://github.com/barnsheltie/malloc-k2-edgecache#readme" class="btn btn-secondary">
+            Read the Docs
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>
+        Built with Rust &amp; <a href="https://github.com/cloudflare/pingora">Pingora</a> |
+        <a href="https://github.com/barnsheltie/malloc-k2-edgecache">GitHub</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
