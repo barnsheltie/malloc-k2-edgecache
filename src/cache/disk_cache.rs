@@ -193,6 +193,54 @@ impl DiskCache {
         self.current_size.load(Ordering::SeqCst)
     }
 
+    /// Scan and remove all expired entries, returns count of removed items
+    pub async fn remove_expired(&self) -> u64 {
+        let mut removed = 0u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let mut expired_keys = Vec::new();
+
+        // Walk the cache directory looking for expired entries
+        if let Ok(mut entries) = fs::read_dir(&self.root_path).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Ok(mut subentries) = fs::read_dir(&path).await {
+                        while let Ok(Some(subentry)) = subentries.next_entry().await {
+                            let subpath = subentry.path();
+                            if subpath.extension().map(|e| e == "meta").unwrap_or(false) {
+                                if let Ok(content) = fs::read_to_string(&subpath).await {
+                                    if let Ok(meta) = serde_json::from_str::<CacheMetadata>(&content) {
+                                        // Check if expired
+                                        let expires_at = meta.created_at_unix + meta.ttl_seconds;
+                                        if now > expires_at {
+                                            expired_keys.push(CacheKey::new(&meta.bucket, &meta.key));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove expired entries
+        for key in expired_keys {
+            self.remove(&key).await;
+            removed += 1;
+        }
+
+        if removed > 0 {
+            debug!("Removed {} expired entries from disk cache", removed);
+        }
+
+        removed
+    }
+
     /// Get paths for data and metadata files
     fn get_paths(&self, key: &CacheKey) -> (PathBuf, PathBuf) {
         // Use hash prefix for directory sharding to avoid too many files in one dir

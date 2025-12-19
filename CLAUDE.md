@@ -56,15 +56,26 @@ src/
 │   ├── mod.rs       # Auth manager
 │   └── aws_sigv4.rs # AWS Signature V4 implementation
 ├── cache/           # Caching layer
-│   ├── mod.rs       # Cache manager (coordinates memory + disk)
+│   ├── mod.rs       # Cache manager (coordinates memory + disk, expiration)
 │   ├── cache_key.rs # Cache key generation (SHA256-based)
 │   ├── memory_cache.rs # In-memory LRU cache
 │   └── disk_cache.rs   # Disk-based persistent cache
 ├── metrics/         # Prometheus metrics
 │   └── mod.rs
-└── proxy/           # Pingora proxy implementation
-    ├── mod.rs
-    └── s3_proxy.rs  # S3 proxy handler (ProxyHttp trait)
+├── multipart/       # Multipart upload handling
+│   └── mod.rs       # Upload manager, part tracking, assembly
+├── proxy/           # Pingora proxy implementation
+│   ├── mod.rs
+│   └── s3_proxy.rs  # S3 proxy handler (ProxyHttp trait)
+├── writeback/       # Write-back queue for deferred S3 uploads
+│   └── mod.rs       # Queue, processor, S3Operations trait
+└── federator/       # Inter-node communication with central federator
+    ├── mod.rs       # FederatorClient for WebSocket communication
+    ├── connection.rs # WebSocket connection management
+    ├── handler.rs   # Incoming message handler (invalidations, syncs)
+    ├── health.rs    # Heartbeat sender with cache statistics
+    ├── protocol.rs  # Message types matching TypeScript federator
+    └── route_cache.rs # Local cache for object→owner mappings
 ```
 
 ### Key Components
@@ -73,6 +84,7 @@ src/
 - **Cache Manager** (`cache/mod.rs`): Two-tier caching with memory (LRU) and disk (persistent) layers
 - **Auth Module** (`auth/aws_sigv4.rs`): AWS Signature V4 signing and verification
 - **REST API** (`api/`): Management endpoints on port 14000
+- **Federator Client** (`federator/`): WebSocket-based communication with central federator for cache invalidation, object routing, and cluster coordination
 
 ### Default Ports
 
@@ -97,16 +109,55 @@ src/
 - [x] Prometheus metrics definitions
 - [x] Pingora proxy with S3 request parsing
 - [x] GitHub repo: https://github.com/barnsheltie/malloc-k2-edgecache
+- [x] Cache serving from request_filter (serves cached responses with x-cache: HIT header)
+- [x] Response body caching via upstream_response_body_filter (caches GET 200 responses)
+- [x] Write-back queue for deferred PUT uploads (src/writeback/mod.rs)
+- [x] PUT request handling with immediate local cache + background S3 upload
+- [x] Write-back API endpoints (/api/writeback/stats, /api/writeback/queue)
+- [x] Cache expiration background task (configurable interval, memory + disk scanning)
+- [x] Trait-based S3 operations for testability (S3Operations, MockS3Client)
+- [x] Multipart upload handling (InitiateMultipartUpload, UploadPart, CompleteMultipartUpload, AbortMultipartUpload, ListParts)
+- [x] Multipart API endpoints (/api/multipart/stats, /api/multipart/uploads)
+- [x] Federator client for inter-node communication (src/federator/)
+- [x] WebSocket-based connection to central federator
+- [x] Route cache for object→owner mappings with TTL
+- [x] Heartbeat sender with cache statistics
+- [x] Federator API endpoint (/api/federator/status)
 
-### TODO (Next Steps)
-- [ ] Wire up cache to actually serve cached responses
-- [ ] Implement response body caching in proxy
-- [ ] Add write-back queue for deferred uploads
-- [ ] Add cache expiration background task
-- [ ] Implement multipart upload handling
+### Future Enhancements
 - [ ] Add Azure Blob Storage support
-- [ ] Add inter-node communication (port 14003)
 - [ ] Add HTTPS support with TLS certificates
+
+## Federator Architecture
+
+The federator enables distributed cache coordination using a hub-spoke architecture:
+
+### Components
+- **Federator (Hub)**: TypeScript service on Cloudflare Workers with Durable Objects (`federator/`)
+- **Nodes (Spokes)**: Rust edge cache nodes that connect via WebSocket
+
+### Node Types
+- **Cache Node**: Read-heavy, caches objects from storage nodes
+- **Storage Node**: Authoritative source, owns objects and handles writes
+
+### Features
+- **Cache Invalidation**: Federator broadcasts invalidation when objects change
+- **Object Routing**: Nodes can locate object owners via federator
+- **Heartbeats**: Nodes report cache stats periodically
+- **JWT Authentication**: Per-node authentication tokens
+
+### Federator Configuration
+```toml
+[federator]
+enabled = true
+url = "wss://federator.example.com/ws"
+node_type = "cache"  # or "storage"
+node_id = "node-us-east-1"
+jwt_token = "eyJ..."
+heartbeat_interval_seconds = 30
+buckets = ["my-bucket"]
+endpoint = "https://cache-us-east.example.com"
+```
 
 ## Configuration
 
@@ -128,6 +179,7 @@ Key dependencies:
 - **hmac/sha2** - AWS authentication
 - **dashmap** - Concurrent hash maps
 - **prometheus** - Metrics
+- **tokio-tungstenite** - WebSocket client for federator communication
 
 ## Reference: KodiakEdgeCache
 

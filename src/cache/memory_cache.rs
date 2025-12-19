@@ -108,6 +108,39 @@ impl MemoryCache {
         self.data.is_empty()
     }
 
+    /// Scan and remove all expired entries, returns count of removed items
+    pub async fn remove_expired(&self) -> u64 {
+        let mut removed = 0u64;
+        let mut expired_keys = Vec::new();
+
+        // Find all expired keys
+        for entry in self.data.iter() {
+            if entry.value().is_expired() {
+                expired_keys.push(entry.key().clone());
+            }
+        }
+
+        // Remove expired entries
+        for key in expired_keys {
+            if let Some((_, obj)) = self.data.remove(&key) {
+                self.current_size.fetch_sub(obj.content_length, Ordering::SeqCst);
+
+                let mut lru = self.lru_order.lock();
+                if let Some(pos) = lru.iter().position(|k| k == &key) {
+                    lru.remove(pos);
+                }
+
+                removed += 1;
+            }
+        }
+
+        if removed > 0 {
+            tracing::debug!("Removed {} expired entries from memory cache", removed);
+        }
+
+        removed
+    }
+
     /// Evict least recently used items until we have enough space
     async fn evict_if_needed(&self, needed_size: u64) {
         while self.current_size.load(Ordering::SeqCst) + needed_size > self.max_size {

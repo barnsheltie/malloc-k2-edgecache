@@ -4,6 +4,20 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Node types in the hybrid architecture
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NodeType {
+    Cache,
+    Storage,
+}
+
+impl Default for NodeType {
+    fn default() -> Self {
+        NodeType::Cache
+    }
+}
+
 /// Main configuration structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -11,6 +25,10 @@ pub struct Config {
     pub cache: CacheConfig,
     pub logging: LoggingConfig,
     pub s3: S3Config,
+    #[serde(default)]
+    pub writeback: WriteBackConfig,
+    #[serde(default)]
+    pub federator: FederatorConfig,
     #[serde(default)]
     pub buckets: Vec<BucketConfig>,
 }
@@ -63,6 +81,10 @@ pub struct CacheConfig {
     /// Default TTL in seconds
     #[serde(default = "default_ttl")]
     pub default_ttl_seconds: u64,
+
+    /// Expiration scan interval in seconds (0 to disable background expiration)
+    #[serde(default = "default_expiration_interval")]
+    pub expiration_interval_seconds: u64,
 }
 
 /// Logging configuration
@@ -99,6 +121,104 @@ pub struct S3Config {
     pub secret_key: Option<String>,
 }
 
+/// Write-back queue configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WriteBackConfig {
+    /// Enable write-back queue
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum concurrent uploads to S3
+    #[serde(default = "default_wb_max_concurrent")]
+    pub max_concurrent_uploads: usize,
+
+    /// Delay before committing to S3 (seconds)
+    #[serde(default = "default_wb_commit_delay")]
+    pub commit_delay_seconds: u64,
+
+    /// Maximum retry attempts
+    #[serde(default = "default_wb_max_retries")]
+    pub max_retries: u32,
+
+    /// Queue processing interval (seconds)
+    #[serde(default = "default_wb_process_interval")]
+    pub process_interval_seconds: u64,
+
+    /// Maximum queue size
+    #[serde(default = "default_wb_max_queue_size")]
+    pub max_queue_size: usize,
+}
+
+impl Default for WriteBackConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_concurrent_uploads: default_wb_max_concurrent(),
+            commit_delay_seconds: default_wb_commit_delay(),
+            max_retries: default_wb_max_retries(),
+            process_interval_seconds: default_wb_process_interval(),
+            max_queue_size: default_wb_max_queue_size(),
+        }
+    }
+}
+
+/// Federator configuration for inter-node communication
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FederatorConfig {
+    /// Enable federator connection
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Federator WebSocket URL (wss://...)
+    #[serde(default = "default_federator_url")]
+    pub url: String,
+
+    /// Unique node identifier (auto-generated if not set)
+    pub node_id: Option<String>,
+
+    /// Cluster identifier
+    #[serde(default = "default_cluster_id")]
+    pub cluster_id: String,
+
+    /// Node type: cache or storage
+    #[serde(default)]
+    pub node_type: NodeType,
+
+    /// HTTP endpoint for this node (required for storage nodes, used for proxying)
+    pub endpoint: Option<String>,
+
+    /// JWT token for authentication with federator
+    pub jwt_token: Option<String>,
+
+    /// Heartbeat interval in seconds
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval_seconds: u64,
+
+    /// Reconnection delay in seconds
+    #[serde(default = "default_reconnect_delay")]
+    pub reconnect_delay_seconds: u64,
+
+    /// Buckets to register with federator (defaults to all configured buckets)
+    pub buckets: Option<Vec<String>>,
+}
+
+impl Default for FederatorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: default_federator_url(),
+            node_id: None,
+            cluster_id: default_cluster_id(),
+            node_type: NodeType::Cache,
+            endpoint: None,
+            jwt_token: None,
+            heartbeat_interval_seconds: default_heartbeat_interval(),
+            reconnect_delay_seconds: default_reconnect_delay(),
+            buckets: None,
+        }
+    }
+}
+
 /// Per-bucket configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BucketConfig {
@@ -119,6 +239,9 @@ pub struct BucketConfig {
 
     /// Secret key override
     pub secret_key: Option<String>,
+
+    /// Write-back enabled for this bucket (defaults to global setting)
+    pub writeback_enabled: Option<bool>,
 }
 
 impl Config {
@@ -147,7 +270,14 @@ impl Config {
                 cache_ttl: None,
                 access_key: None,
                 secret_key: None,
+                writeback_enabled: None,
             })
+    }
+
+    /// Check if write-back is enabled for a bucket
+    pub fn is_writeback_enabled(&self, bucket_name: &str) -> bool {
+        let bucket_config = self.get_bucket_config(bucket_name);
+        bucket_config.writeback_enabled.unwrap_or(self.writeback.enabled)
     }
 }
 
@@ -165,6 +295,16 @@ fn default_log_level() -> String { "info".to_string() }
 fn default_log_format() -> String { "json".to_string() }
 fn default_s3_endpoint() -> String { "https://s3.amazonaws.com".to_string() }
 fn default_region() -> String { "us-east-1".to_string() }
+fn default_expiration_interval() -> u64 { 300 } // 5 minutes
+fn default_wb_max_concurrent() -> usize { 64 }
+fn default_wb_commit_delay() -> u64 { 60 }
+fn default_wb_max_retries() -> u32 { 3 }
+fn default_wb_process_interval() -> u64 { 10 }
+fn default_wb_max_queue_size() -> usize { 10000 }
+fn default_federator_url() -> String { "wss://edgecache-federator.workers.dev/ws".to_string() }
+fn default_cluster_id() -> String { "default".to_string() }
+fn default_heartbeat_interval() -> u64 { 30 }
+fn default_reconnect_delay() -> u64 { 5 }
 
 impl Default for Config {
     fn default() -> Self {
@@ -183,6 +323,7 @@ impl Default for Config {
                 disk_max_size_gb: default_disk_max_size(),
                 memory_max_size_mb: default_memory_max_size(),
                 default_ttl_seconds: default_ttl(),
+                expiration_interval_seconds: default_expiration_interval(),
             },
             logging: LoggingConfig {
                 level: default_log_level(),
@@ -195,6 +336,8 @@ impl Default for Config {
                 access_key: None,
                 secret_key: None,
             },
+            writeback: WriteBackConfig::default(),
+            federator: FederatorConfig::default(),
             buckets: vec![],
         }
     }

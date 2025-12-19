@@ -10,8 +10,11 @@ mod api;
 mod auth;
 mod cache;
 mod config;
+mod federator;
 mod metrics;
+mod multipart;
 mod proxy;
+mod writeback;
 
 use crate::config::Config;
 

@@ -46,6 +46,28 @@ pub fn bucket_routes() -> Router<Arc<AppState>> {
         )
 }
 
+/// Write-back queue routes
+pub fn writeback_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/writeback/stats", get(handlers::get_writeback_stats))
+        .route("/api/writeback/queue", get(handlers::list_writeback_queue))
+}
+
+/// Multipart upload routes
+pub fn multipart_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/multipart/stats", get(handlers::get_multipart_stats))
+        .route("/api/multipart/uploads", get(handlers::list_multipart_uploads))
+        .route("/api/multipart/uploads/:upload_id", get(handlers::get_multipart_upload))
+        .route("/api/multipart/uploads/:upload_id", delete(handlers::abort_multipart_upload))
+}
+
+/// Federator routes
+pub fn federator_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/federator/status", get(handlers::get_federator_status))
+}
+
 /// Swagger UI routes
 pub fn swagger_routes() -> Router<Arc<AppState>> {
     Router::new()

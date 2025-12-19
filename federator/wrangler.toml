@@ -1,0 +1,28 @@
+name = "edgecache-federator"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Durable Objects binding
+[[durable_objects.bindings]]
+name = "FEDERATOR"
+class_name = "ClusterFederator"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["ClusterFederator"]
+
+# Environment variables (use wrangler secret for JWT_SECRET)
+# JWT_SECRET - Set via: wrangler secret put JWT_SECRET
+
+[vars]
+# Default heartbeat timeout in seconds (node considered offline if no heartbeat)
+HEARTBEAT_TIMEOUT_SECONDS = "90"
+
+# Development settings
+[env.dev]
+name = "edgecache-federator-dev"
+
+# Production settings
+[env.production]
+name = "edgecache-federator"

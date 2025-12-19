@@ -68,6 +68,10 @@ pub struct CacheStats {
     pub memory_size_bytes: u64,
     pub disk_size_bytes: u64,
     pub total_objects: u64,
+    /// Total items expired (memory + disk)
+    pub expired_count: u64,
+    /// Last expiration run timestamp (unix seconds)
+    pub last_expiration_run: u64,
 }
 
 /// Main cache manager coordinating memory and disk caches
@@ -198,5 +202,43 @@ impl CacheManager {
     /// Get default TTL
     pub fn default_ttl(&self) -> Duration {
         Duration::from_secs(self.config.default_ttl_seconds)
+    }
+
+    /// Remove all expired entries from both memory and disk caches
+    /// Returns the total number of items removed
+    pub async fn remove_expired(&self) -> u64 {
+        let memory_expired = self.memory_cache.remove_expired().await;
+        let disk_expired = self.disk_cache.remove_expired().await;
+        let total = memory_expired + disk_expired;
+
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.expired_count += total;
+            stats.last_expiration_run = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+        }
+
+        if total > 0 {
+            info!("Expired {} items (memory: {}, disk: {})", total, memory_expired, disk_expired);
+        }
+
+        total
+    }
+
+    /// Start a background task that periodically removes expired entries
+    /// Returns a handle that can be used to stop the task
+    pub fn start_expiration_task(self: Arc<Self>, interval: Duration) -> tokio::task::JoinHandle<()> {
+        info!("Starting cache expiration task with interval {:?}", interval);
+
+        tokio::spawn(async move {
+            let mut interval_timer = tokio::time::interval(interval);
+            loop {
+                interval_timer.tick().await;
+                self.remove_expired().await;
+            }
+        })
     }
 }
